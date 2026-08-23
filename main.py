@@ -4,6 +4,7 @@ import time
 from flask import Flask
 import telebot
 import google.generativeai as genai
+from gtts import gTTS
 
 app = Flask(__name__)
 
@@ -23,6 +24,26 @@ model = genai.GenerativeModel(
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
+def send_text_and_voice(message, text_response):
+    # إرسال النص أولاً
+    bot.reply_to(message, text_response)
+    
+    try:
+        # تحويل النص إلى صوت باللغة الإنجليزية
+        tts = gTTS(text=text_response, lang='en', slow=False)
+        voice_path = f"response_{message.chat.id}.ogg"
+        tts.save(voice_path)
+        
+        # إرسال الملف الصوتي كرسالة صوتية في تلغرام
+        with open(voice_path, 'rb') as audio:
+            bot.send_voice(message.chat.id, audio, reply_to_message_id=message.message_id)
+            
+        # حذف الملف الصوتي المؤقت من السيرفر بعد إرساله
+        if os.path.exists(voice_path):
+            os.remove(voice_path)
+    except Exception as voice_err:
+        print(f"TTS Error: {str(voice_err)}")
+
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     bot.reply_to(message, "Hello! Send me a text or voice message to practice your English.")
@@ -31,7 +52,7 @@ def start_cmd(message):
 def handle_text(message):
     try:
         response = model.generate_content(message.text)
-        bot.reply_to(message, response.text)
+        send_text_and_voice(message, response.text)
     except Exception as e:
         bot.reply_to(message, f"Error: {str(e)}")
 
@@ -44,7 +65,7 @@ def handle_voice(message):
             "Listen and reply in simple English:",
             {"mime_type": "audio/ogg", "data": downloaded_file}
         ])
-        bot.reply_to(message, response.text)
+        send_text_and_voice(message, response.text)
     except Exception as e:
         bot.reply_to(message, f"Voice Error: {str(e)}")
 
