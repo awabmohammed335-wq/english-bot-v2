@@ -2,4 +2,6 @@ Flask
 PyTelegramBotAPI
 google-generativeai
 gTTS
+gunicorn
+
 
