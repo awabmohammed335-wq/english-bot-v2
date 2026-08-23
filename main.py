@@ -47,11 +47,12 @@ def handle_voice(message):
         bot.reply_to(message, f"Voice Error: {str(e)}")
 
 def start_polling():
-    bot.infinity_polling(skip_pending_webhooks=True)
+    bot.infinity_polling()
 
-# تشغيل البوت في مسار منفصل عند بدء تطبيق Flask
+# تشغيل البوت في مسار منفصل
 threading.Thread(target=start_polling, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
