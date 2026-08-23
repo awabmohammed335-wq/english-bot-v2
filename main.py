@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 from flask import Flask
 import telebot
 import google.generativeai as genai
@@ -16,9 +17,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# تعديل اسم النموذج إلى النسخة المحدثة والمصححة
+# إعداد الموديل
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash-latest",
+    model_name="gemini-1.5-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
@@ -48,7 +49,10 @@ def handle_voice(message):
         bot.reply_to(message, f"Voice Error: {str(e)}")
 
 def start_polling():
-    bot.infinity_polling()
+    # حذف أي Webhook قديم لتفادي التعارض
+    bot.remove_webhook()
+    time.sleep(1)
+    bot.infinity_polling(none_stop=True)
 
 # تشغيل البوت في مسار منفصل
 threading.Thread(target=start_polling, daemon=True).start()
@@ -56,4 +60,5 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
