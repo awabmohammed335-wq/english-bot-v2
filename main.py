@@ -18,31 +18,27 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# استخدام موديل gemini-3.6-flash المعتمد
 model = genai.GenerativeModel(
     model_name="gemini-3.6-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
 def send_text_and_voice(message, text_response):
-    # إرسال النص أولاً
     bot.reply_to(message, text_response)
     
+    voice_path = f"voice_{message.message_id}.mp3"
     try:
-        # تحويل النص إلى صوت باللغة الإنجليزية
         tts = gTTS(text=text_response, lang='en', slow=False)
-        voice_path = f"response_{message.chat.id}.ogg"
         tts.save(voice_path)
         
-        # إرسال الملف الصوتي كرسالة صوتية في تلغرام
         with open(voice_path, 'rb') as audio:
             bot.send_voice(message.chat.id, audio, reply_to_message_id=message.message_id)
             
-        # حذف الملف الصوتي المؤقت من السيرفر بعد إرساله
+    except Exception as e:
+        bot.send_message(message.chat.id, f"⚠️ Audio Error: {str(e)}")
+    finally:
         if os.path.exists(voice_path):
             os.remove(voice_path)
-    except Exception as voice_err:
-        print(f"TTS Error: {str(voice_err)}")
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
@@ -74,7 +70,6 @@ def start_polling():
     time.sleep(1)
     bot.infinity_polling(none_stop=True)
 
-# تشغيل البوت في خلفية تطبيق Flask
 threading.Thread(target=start_polling, daemon=True).start()
 
 if __name__ == "__main__":
