@@ -66,10 +66,18 @@ def handle_voice(message):
         bot.reply_to(message, f"Voice Error: {str(e)}")
 
 def start_polling():
-    bot.remove_webhook()
-    time.sleep(1)
-    bot.infinity_polling(none_stop=True)
+    while True:
+        try:
+            # إلغاء أي Webhook قديم وتصفية أي اتصال عالق
+            bot.remove_webhook()
+            time.sleep(2)
+            print("Starting bot polling...")
+            bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"Polling error: {e}")
+            time.sleep(5)
 
+# تشغيل البوت في خلفية تطبيق Flask
 threading.Thread(target=start_polling, daemon=True).start()
 
 if __name__ == "__main__":
