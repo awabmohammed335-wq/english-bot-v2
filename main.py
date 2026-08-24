@@ -50,7 +50,10 @@ def handle_text(message):
         response = model.generate_content(message.text)
         send_text_and_voice(message, response.text)
     except Exception as e:
-        bot.reply_to(message, f"Error: {str(e)}")
+        if "429" in str(e):
+            bot.reply_to(message, "⏳ لقد تجاوزت الحد المجاني السريع للتحدث! انتظر حوالي دقيقة ثم حاول مجدداً.\n\n⏳ You reached the limit! Please wait a minute before sending another message.")
+        else:
+            bot.reply_to(message, f"Error: {str(e)}")
 
 @bot.message_handler(content_types=['voice'])
 def handle_voice(message):
@@ -63,12 +66,14 @@ def handle_voice(message):
         ])
         send_text_and_voice(message, response.text)
     except Exception as e:
-        bot.reply_to(message, f"Voice Error: {str(e)}")
+        if "429" in str(e):
+            bot.reply_to(message, "⏳ لقد تجاوزت الحد المجاني السريع للتحدث! انتظر حوالي دقيقة ثم حاول مجدداً.\n\n⏳ You reached the limit! Please wait a minute before sending another message.")
+        else:
+            bot.reply_to(message, f"Voice Error: {str(e)}")
 
 def start_polling():
     while True:
         try:
-            # إلغاء أي Webhook قديم وتصفية أي اتصال عالق
             bot.remove_webhook()
             time.sleep(2)
             print("Starting bot polling...")
