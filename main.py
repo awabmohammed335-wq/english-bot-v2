@@ -18,19 +18,20 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# استخدام اسم النموذج الرسمي المعيار المباشر
+# إرجاع النموذج الذي يعمل لديك بكفاءة
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-3.6-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
-def generate_content_with_retry(contents, retries=3, delay=4):
+# دالة ذكية لإعادة المحاولة تلقائياً والانتظار عند مواجهة 429
+def generate_content_with_retry(contents, retries=4, delay=6):
     for attempt in range(retries):
         try:
             return model.generate_content(contents)
         except Exception as e:
             if "429" in str(e) and attempt < retries - 1:
-                time.sleep(delay)
+                time.sleep(delay)  # انتظر 6 ثوانٍ في الخلفية ثم حاول مجدداً
             else:
                 raise e
 
@@ -62,7 +63,7 @@ def handle_text(message):
         send_text_and_voice(message, response.text)
     except Exception as e:
         if "429" in str(e):
-            bot.reply_to(message, "⏳ الضغط عالٍ على السيرفر حالياً، يرجى الانتظار بضع ثوانٍ وإعادة إرسال رسالتك.\n\n⏳ High traffic, please wait a few seconds and try again.")
+            bot.reply_to(message, "⏳ السيرفر مشغول حالياً، يرجى إرسال رسالتك بعد ثوانٍ بسيطة.\n\n⏳ High server load, please retry in a few seconds.")
         else:
             bot.reply_to(message, f"Error: {str(e)}")
 
@@ -81,7 +82,7 @@ def handle_voice(message):
         send_text_and_voice(message, response.text)
     except Exception as e:
         if "429" in str(e):
-            bot.reply_to(message, "⏳ الضغط عالٍ على السيرفر حالياً، يرجى الانتظار بضع ثوانٍ وإعادة إرسال رسالتك.\n\n⏳ High traffic, please wait a few seconds and try again.")
+            bot.reply_to(message, "⏳ السيرفر مشغول حالياً، يرجى إرسال رسالتك بعد ثوانٍ بسيطة.\n\n⏳ High server load, please retry in a few seconds.")
         else:
             bot.reply_to(message, f"Voice Error: {str(e)}")
 
@@ -101,6 +102,7 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
