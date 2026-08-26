@@ -18,10 +18,22 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
+# تعديل اسم النموذج إلى النموذج الرسمي الأكثر سرعة واستقراراً
 model = genai.GenerativeModel(
-    model_name="gemini-3.6-flash",
+    model_name="gemini-1.5-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
+
+# دالة ذكية لإعادة المحاولة تلقائياً في حالة خطأ 429 قبل إظهار التنبيه للمستخدم
+def generate_content_with_retry(contents, retries=3, delay=4):
+    for attempt in range(retries):
+        try:
+            return model.generate_content(contents)
+        except Exception as e:
+            if "429" in str(e) and attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                raise e
 
 def send_text_and_voice(message, text_response):
     bot.reply_to(message, text_response)
@@ -47,11 +59,11 @@ def start_cmd(message):
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
     try:
-        response = model.generate_content(message.text)
+        response = generate_content_with_retry(message.text)
         send_text_and_voice(message, response.text)
     except Exception as e:
         if "429" in str(e):
-            bot.reply_to(message, "⏳ لقد تجاوزت الحد المجاني السريع للتحدث! انتظر حوالي دقيقة ثم حاول مجدداً.\n\n⏳ You reached the limit! Please wait a minute before sending another message.")
+            bot.reply_to(message, "⏳ الضغط عالٍ على السيرفر حالياً، يرجى الانتظار بضع ثوانٍ وإعادة إرسال رسالتك.\n\n⏳ High traffic, please wait a few seconds and try again.")
         else:
             bot.reply_to(message, f"Error: {str(e)}")
 
@@ -60,14 +72,17 @@ def handle_voice(message):
     try:
         file_info = bot.get_file(message.voice.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        response = model.generate_content([
+        
+        contents = [
             "Listen and reply in simple English:",
             {"mime_type": "audio/ogg", "data": downloaded_file}
-        ])
+        ]
+        
+        response = generate_content_with_retry(contents)
         send_text_and_voice(message, response.text)
     except Exception as e:
         if "429" in str(e):
-            bot.reply_to(message, "⏳ لقد تجاوزت الحد المجاني السريع للتحدث! انتظر حوالي دقيقة ثم حاول مجدداً.\n\n⏳ You reached the limit! Please wait a minute before sending another message.")
+            bot.reply_to(message, "⏳ الضغط عالٍ على السيرفر حالياً، يرجى الانتظار بضع ثوانٍ وإعادة إرسال رسالتك.\n\n⏳ High traffic, please wait a few seconds and try again.")
         else:
             bot.reply_to(message, f"Voice Error: {str(e)}")
 
@@ -88,3 +103,4 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
