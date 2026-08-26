@@ -18,13 +18,12 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# تعديل اسم النموذج إلى النموذج الرسمي الأكثر سرعة واستقراراً
+# تم تعديل اسم النموذج إلى gemini-1.5-flash-latest لضمان التوافق وقبول الصوت والنصوص
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-1.5-flash-latest",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
-# دالة ذكية لإعادة المحاولة تلقائياً في حالة خطأ 429 قبل إظهار التنبيه للمستخدم
 def generate_content_with_retry(contents, retries=3, delay=4):
     for attempt in range(retries):
         try:
@@ -97,10 +96,10 @@ def start_polling():
             print(f"Polling error: {e}")
             time.sleep(5)
 
-# تشغيل البوت في خلفية تطبيق Flask
 threading.Thread(target=start_polling, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
