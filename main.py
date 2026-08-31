@@ -1,10 +1,11 @@
 import os
+import asyncio
 import threading
 import time
 from flask import Flask
 import telebot
 import google.generativeai as genai
-from gtts import gTTS
+import edge_tts
 
 app = Flask(__name__)
 
@@ -18,20 +19,35 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# إرجاع النموذج الذي يعمل لديك بكفاءة
+# النموذج المحدد من قبلك
 model = genai.GenerativeModel(
     model_name="gemini-3.6-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
-# دالة ذكية لإعادة المحاولة تلقائياً والانتظار عند مواجهة 429
-def generate_content_with_retry(contents, retries=4, delay=6):
+# دالة ذكية لإعادة المحاولة تلقائياً والانتظار عند مواجهة 429 أو 503
+def generate_content_with_retry(contents, retries=5, delay=5):
     for attempt in range(retries):
         try:
             return model.generate_content(contents)
         except Exception as e:
-            if "429" in str(e) and attempt < retries - 1:
-                time.sleep(delay)  # انتظر 6 ثوانٍ في الخلفية ثم حاول مجدداً
+            err_str = str(e)
+            if ("429" in err_str or "503" in err_str or "RESOURCE_EXHAUSTED" in err_str) and attempt < retries - 1:
+                time.sleep(delay * (attempt + 1))  # انتظار متزايد ذكي لتصفية العداد
+            else:
+                raise e
+
+# دالة تحويل النص إلى صوت باستخدام edge-tts مع إعادة المحاولة
+async def generate_voice_async(text, voice_path, retries=3):
+    # voice="en-US-AriaNeural" تمنح صوتاً إنجليزيّاً طبيعيّاً وواضحاً جداً
+    communicate = edge_tts.Communicate(text, voice="en-US-AriaNeural")
+    for attempt in range(retries):
+        try:
+            await communicate.save(voice_path)
+            return True
+        except Exception as e:
+            if attempt < retries - 1:
+                await asyncio.sleep(2)
             else:
                 raise e
 
@@ -40,14 +56,15 @@ def send_text_and_voice(message, text_response):
     
     voice_path = f"voice_{message.message_id}.mp3"
     try:
-        tts = gTTS(text=text_response, lang='en', slow=False)
-        tts.save(voice_path)
+        # تشغيل الدالة الصوتية المتزامنة بأمان
+        asyncio.run(generate_voice_async(text_response, voice_path))
         
         with open(voice_path, 'rb') as audio:
             bot.send_voice(message.chat.id, audio, reply_to_message_id=message.message_id)
             
     except Exception as e:
-        bot.send_message(message.chat.id, f"⚠️ Audio Error: {str(e)}")
+        print(f"Audio Error: {e}")
+        # لن يتم إرسال رسالة خطأ مزعجة بالشات، فقط سيتم الاكتفاء بالنص عند تعذر الصوت
     finally:
         if os.path.exists(voice_path):
             os.remove(voice_path)
@@ -62,10 +79,11 @@ def handle_text(message):
         response = generate_content_with_retry(message.text)
         send_text_and_voice(message, response.text)
     except Exception as e:
-        if "429" in str(e):
-            bot.reply_to(message, "⏳ السيرفر مشغول حالياً، يرجى إرسال رسالتك بعد ثوانٍ بسيطة.\n\n⏳ High server load, please retry in a few seconds.")
+        err_str = str(e)
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+            bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.\n\n⏳ Server is busy right now, please try again in 20 seconds.")
         else:
-            bot.reply_to(message, f"Error: {str(e)}")
+            bot.reply_to(message, "⚠️ حدث خطأ غير متوقع، يرجى المحاولة لاحقاً.")
 
 @bot.message_handler(content_types=['voice'])
 def handle_voice(message):
@@ -81,10 +99,11 @@ def handle_voice(message):
         response = generate_content_with_retry(contents)
         send_text_and_voice(message, response.text)
     except Exception as e:
-        if "429" in str(e):
-            bot.reply_to(message, "⏳ السيرفر مشغول حالياً، يرجى إرسال رسالتك بعد ثوانٍ بسيطة.\n\n⏳ High server load, please retry in a few seconds.")
+        err_str = str(e)
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+            bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.\n\n⏳ Server is busy right now, please try again in 20 seconds.")
         else:
-            bot.reply_to(message, f"Voice Error: {str(e)}")
+            bot.reply_to(message, "⚠️ حدث خطأ في معالجة الصوت، يرجى إعادة المحاولة.")
 
 def start_polling():
     while True:
@@ -102,6 +121,7 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
