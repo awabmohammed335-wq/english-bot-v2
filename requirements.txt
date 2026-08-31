@@ -1,8 +1,9 @@
 Flask
 PyTelegramBotAPI
 google-generativeai>=0.8.3
-gTTS
+edge-tts
 gunicorn
+
 
 
 
