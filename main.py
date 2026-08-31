@@ -25,21 +25,29 @@ model = genai.GenerativeModel(
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
+# قاموس لتخزين جلسات المحادثة (الذاكرة) لكل مستخدم بشكل مستقل
+user_sessions = {}
+
+def get_user_chat(chat_id):
+    """إنشاء أو جلب جلسة المحادثة الخاصة بالمستخدم لمتابعة سياق الكلام"""
+    if chat_id not in user_sessions:
+        user_sessions[chat_id] = model.start_chat(history=[])
+    return user_sessions[chat_id]
+
 # دالة ذكية لإعادة المحاولة تلقائياً والانتظار عند مواجهة 429 أو 503
-def generate_content_with_retry(contents, retries=5, delay=5):
+def send_message_with_retry(chat_session, contents, retries=5, delay=5):
     for attempt in range(retries):
         try:
-            return model.generate_content(contents)
+            return chat_session.send_message(contents)
         except Exception as e:
             err_str = str(e)
             if ("429" in err_str or "503" in err_str or "RESOURCE_EXHAUSTED" in err_str) and attempt < retries - 1:
-                time.sleep(delay * (attempt + 1))  # انتظار متزايد ذكي لتصفية العداد
+                time.sleep(delay * (attempt + 1))  # انتظار متزايد لتصفية العداد
             else:
                 raise e
 
 # دالة تحويل النص إلى صوت باستخدام edge-tts مع إعادة المحاولة
 async def generate_voice_async(text, voice_path, retries=3):
-    # voice="en-US-AriaNeural" تمنح صوتاً إنجليزيّاً طبيعيّاً وواضحاً جداً
     communicate = edge_tts.Communicate(text, voice="en-US-AriaNeural")
     for attempt in range(retries):
         try:
@@ -56,7 +64,6 @@ def send_text_and_voice(message, text_response):
     
     voice_path = f"voice_{message.message_id}.mp3"
     try:
-        # تشغيل الدالة الصوتية المتزامنة بأمان
         asyncio.run(generate_voice_async(text_response, voice_path))
         
         with open(voice_path, 'rb') as audio:
@@ -64,19 +71,21 @@ def send_text_and_voice(message, text_response):
             
     except Exception as e:
         print(f"Audio Error: {e}")
-        # لن يتم إرسال رسالة خطأ مزعجة بالشات، فقط سيتم الاكتفاء بالنص عند تعذر الصوت
     finally:
         if os.path.exists(voice_path):
             os.remove(voice_path)
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    bot.reply_to(message, "Hello! Send me a text or voice message to practice your English.")
+    # مسح ذاكرة الشات عند كتابة /start للبدء من جديد
+    user_sessions[message.chat.id] = model.start_chat(history=[])
+    bot.reply_to(message, "Hello! Send me a text or voice message to practice your English. I will remember our context!")
 
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
     try:
-        response = generate_content_with_retry(message.text)
+        chat_session = get_user_chat(message.chat.id)
+        response = send_message_with_retry(chat_session, message.text)
         send_text_and_voice(message, response.text)
     except Exception as e:
         err_str = str(e)
@@ -96,7 +105,8 @@ def handle_voice(message):
             {"mime_type": "audio/ogg", "data": downloaded_file}
         ]
         
-        response = generate_content_with_retry(contents)
+        chat_session = get_user_chat(message.chat.id)
+        response = send_message_with_retry(chat_session, contents)
         send_text_and_voice(message, response.text)
     except Exception as e:
         err_str = str(e)
@@ -121,6 +131,7 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
