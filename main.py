@@ -19,22 +19,19 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# النموذج المحدد من قبلك
+# استخدام موديل معتمد رسمياً يدعم تحليل الصوت والنصوص
 model = genai.GenerativeModel(
-    model_name="gemini-3.6-flash",
+    model_name="gemini-1.5-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
-# قاموس لتخزين جلسات المحادثة (الذاكرة) لكل مستخدم بشكل مستقل
 user_sessions = {}
 
 def get_user_chat(chat_id):
-    """إنشاء أو جلب جلسة المحادثة الخاصة بالمستخدم لمتابعة سياق الكلام"""
     if chat_id not in user_sessions:
         user_sessions[chat_id] = model.start_chat(history=[])
     return user_sessions[chat_id]
 
-# دالة ذكية لإعادة المحاولة تلقائياً والانتظار عند مواجهة 429 أو 503
 def send_message_with_retry(chat_session, contents, retries=5, delay=5):
     for attempt in range(retries):
         try:
@@ -42,11 +39,10 @@ def send_message_with_retry(chat_session, contents, retries=5, delay=5):
         except Exception as e:
             err_str = str(e)
             if ("429" in err_str or "503" in err_str or "RESOURCE_EXHAUSTED" in err_str) and attempt < retries - 1:
-                time.sleep(delay * (attempt + 1))  # انتظار متزايد لتصفية العداد
+                time.sleep(delay * (attempt + 1))
             else:
                 raise e
 
-# دالة تحويل النص إلى صوت باستخدام edge-tts مع إعادة المحاولة
 async def generate_voice_async(text, voice_path, retries=3):
     communicate = edge_tts.Communicate(text, voice="en-US-AriaNeural")
     for attempt in range(retries):
@@ -77,7 +73,6 @@ def send_text_and_voice(message, text_response):
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    # مسح ذاكرة الشات عند كتابة /start للبدء من جديد
     user_sessions[message.chat.id] = model.start_chat(history=[])
     bot.reply_to(message, "Hello! Send me a text or voice message to practice your English. I will remember our context!")
 
@@ -100,15 +95,22 @@ def handle_voice(message):
         file_info = bot.get_file(message.voice.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
+        # تحضير بيانات الصوت بأسلوب مطابق لمتطلبات Gemini
+        audio_part = {
+            "mime_type": "audio/ogg",
+            "data": downloaded_file
+        }
+        
         contents = [
-            "Listen and reply in simple English:",
-            {"mime_type": "audio/ogg", "data": downloaded_file}
+            "Listen carefully to this audio and reply in simple English following your system instructions:",
+            audio_part
         ]
         
         chat_session = get_user_chat(message.chat.id)
         response = send_message_with_retry(chat_session, contents)
         send_text_and_voice(message, response.text)
     except Exception as e:
+        print(f"Voice Processing Error: {e}")
         err_str = str(e)
         if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
             bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.\n\n⏳ Server is busy right now, please try again in 20 seconds.")
@@ -131,9 +133,3 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-
-
-
-
-
-
