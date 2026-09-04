@@ -19,6 +19,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
+# استخدام موديل الفلاش السريع والمعتمد رسمياً من Google
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
@@ -84,7 +85,7 @@ def handle_text(message):
     except Exception as e:
         err_str = str(e)
         if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-            bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.\n\n⏳ Server is busy right now, please try again in 20 seconds.")
+            bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.")
         else:
             bot.reply_to(message, "⚠️ حدث خطأ غير متوقع، يرجى المحاولة لاحقاً.")
 
@@ -107,7 +108,7 @@ def handle_voice(message):
         print(f"Voice Processing Error: {e}")
         err_str = str(e)
         if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-            bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.\n\n⏳ Server is busy right now, please try again in 20 seconds.")
+            bot.reply_to(message, "⏳ السيرفر مشغول حالياً بطلبات كثيرة، يرجى إعادة الإرسال بعد 20 ثانية.")
         else:
             bot.reply_to(message, "⚠️ حدث خطأ في معالجة الصوت، يرجى إعادة المحاولة.")
 
@@ -127,4 +128,5 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
