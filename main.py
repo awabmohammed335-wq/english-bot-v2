@@ -4,6 +4,7 @@ import threading
 import time
 from flask import Flask
 import telebot
+from telebot import apihelper
 import google.generativeai as genai
 import edge_tts
 
@@ -16,12 +17,14 @@ def home():
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# إعداد البروكسي الخاص بـ PythonAnywhere لتجاوز حظر الاتصال
+apihelper.proxy = {'https': 'http://proxy.server:3128'}
+
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# تعيين اسم الموديل المطلوب
 model = genai.GenerativeModel(
-    model_name="gemini-3.6-flash",
+    model_name="gemini-1.5-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
 )
 
@@ -128,6 +131,7 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
 
 
 
