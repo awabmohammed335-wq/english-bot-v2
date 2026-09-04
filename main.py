@@ -19,7 +19,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# استخدام موديل معتمد رسمياً يدعم تحليل الصوت والنصوص
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     system_instruction="You are an English tutor. Correct grammar mistakes under '💡 Correction:' and reply in simple English with a follow-up question."
@@ -95,19 +94,14 @@ def handle_voice(message):
         file_info = bot.get_file(message.voice.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # تحضير بيانات الصوت بأسلوب مطابق لمتطلبات Gemini
-        audio_part = {
+        audio_data = {
             "mime_type": "audio/ogg",
             "data": downloaded_file
         }
         
-        contents = [
-            "Listen carefully to this audio and reply in simple English following your system instructions:",
-            audio_part
-        ]
+        prompt = "Listen carefully to this audio and reply in simple English. Correct grammar mistakes under '💡 Correction:' if any."
         
-        chat_session = get_user_chat(message.chat.id)
-        response = send_message_with_retry(chat_session, contents)
+        response = model.generate_content([prompt, audio_data])
         send_text_and_voice(message, response.text)
     except Exception as e:
         print(f"Voice Processing Error: {e}")
@@ -133,3 +127,4 @@ threading.Thread(target=start_polling, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
